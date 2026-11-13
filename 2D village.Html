@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>2D Triangle Mesh Scene</title>
+<style>
+  body { margin:0; background:#111; color:#eee; font-family:sans-serif; text-align:center; }
+  canvas { display:block; margin:10px auto; border:2px solid #444; max-width:100%; }
+  p { margin:4px; }
+</style>
+</head>
+<body>
+<canvas id="gl" width="800" height="600"></canvas>
+<p><b>N</b>: toggle day / night &nbsp; | &nbsp; <b>← →</b>: blow clouds &nbsp; | &nbsp; <b>↑ ↓</b>: raise / lower sun-moon &nbsp; | &nbsp; <b>R</b>: reset</p>
+
+<script id="vs" type="x-shader/x-vertex">
+attribute vec2 a_pos;
+attribute vec3 a_color;
+attribute float a_tag;
+uniform float u_night;
+uniform float u_wind;
+uniform float u_sunY;
+varying vec3 v_color;
+
+void main() {
+  vec2 p = a_pos;
+  vec3 c = a_color;
+
+  if (a_tag > 0.5 && a_tag < 1.5) {
+    p.x = mod(p.x + u_wind + 1.6, 3.2) - 1.6;
+  } else if (a_tag > 1.5 && a_tag < 2.5) {
+    p.y += u_sunY;
+    c = mix(c, vec3(0.9, 0.92, 1.0), u_night);
+  } else if (a_tag > 2.5) {
+    c = mix(c, vec3(1.0, 0.85, 0.2), u_night);
+  }
+
+  if (a_tag < 1.5 || a_tag > 2.5) {
+    vec3 nightTint = c * vec3(0.25, 0.3, 0.55);
+    if (a_tag > 2.5) nightTint = c;
+    c = mix(c, nightTint, u_night);
+  }
+
+  v_color = c;
+  gl_Position = vec4(p, 0.0, 1.0);
+}
+</script>
+
+<script id="fs" type="x-shader/x-fragment">
+precision mediump float;
+varying vec3 v_color;
+void main() { gl_FragColor = vec4(v_color, 1.0); }
+</script>
+
+<script>
+const canvas = document.getElementById('gl');
+const gl = canvas.getContext('webgl');
+
+function makeProgram() {
+  const mk = (type, id) => {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, document.getElementById(id).text);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw gl.getShaderInfoLog(s);
+    return s;
+  };
+  const p = gl.createProgram();
+  gl.attachShader(p, mk(gl.VERTEX_SHADER, 'vs'));
+  gl.attachShader(p, mk(gl.FRAGMENT_SHADER, 'fs'));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw gl.getProgramInfoLog(p);
+  return p;
+}
+const prog = makeProgram();
+gl.useProgram(prog);
+
+const data = [];
+const V = (x, y, c, tag = 0) => data.push(x, y, c[0], c[1], c[2], tag);
+const tri = (a, b, c, ca, cb, cc, tag = 0) => { V(...a, ca, tag); V(...b, cb, tag); V(...c, cc, tag); };
+
+function rect(x1, y1, x2, y2, top, bot, tag = 0) {
+  tri([x1, y2], [x1, y1], [x2, y1], top, bot, bot, tag);
+  tri([x1, y2], [x2, y1], [x2, y2], top, bot, bot, tag);
+}
+
+function disc(cx, cy, r, center, edge, tag = 0, seg = 16) {
+  for (let i = 0; i < seg; i++) {
+    const a1 = (i / seg) * 2 * Math.PI, a2 = ((i + 1) / seg) * 2 * Math.PI;
+    tri([cx, cy],
+        [cx + r * 0.75 * Math.cos(a1), cy + r * Math.sin(a1)],
+        [cx + r * 0.75 * Math.cos(a2), cy + r * Math.sin(a2)],
+        center, edge, edge, tag);
+  }
+}
+
+rect(-1, -0.2, 1, 1, [0.25, 0.55, 0.95], [0.75, 0.9, 1.0]);
+
+disc(0.6, 0.65, 0.14, [1.0, 1.0, 0.6], [1.0, 0.8, 0.1], 2, 20);
+
+tri([-1, -0.2], [-0.5, 0.25], [0.0, -0.2], [0.3, 0.6, 0.3], [0.2, 0.5, 0.25], [0.3, 0.6, 0.3]);
+tri([-0.1, -0.2], [0.5, 0.2], [1.0, -0.2], [0.3, 0.6, 0.3], [0.22, 0.5, 0.27], [0.3, 0.6, 0.3]);
+
+rect(-1, -1, 1, -0.2, [0.35, 0.75, 0.3], [0.15, 0.5, 0.15]);
+
+tri([-0.12, -0.55], [0.12, -0.55], [0.5, -1.0], [0.85, 0.7, 0.45], [0.85, 0.7, 0.45], [0.7, 0.55, 0.35]);
+tri([-0.12, -0.55], [0.5, -1.0], [-0.1, -1.0], [0.85, 0.7, 0.45], [0.7, 0.55, 0.35], [0.7, 0.55, 0.35]);
+
+
+rect(-0.55, -0.55, 0.15, -0.05, [0.95, 0.85, 0.65], [0.85, 0.65, 0.4]);
+
+tri([-0.65, -0.05], [0.25, -0.05], [-0.2, 0.35], [0.7, 0.15, 0.1], [0.6, 0.12, 0.08], [0.9, 0.25, 0.15]);
+tri([-0.55, -0.05], [0.15, -0.05], [-0.2, 0.28], [0.85, 0.2, 0.12], [0.8, 0.18, 0.1], [0.95, 0.35, 0.2]);
+
+rect(0.0, 0.1, 0.1, 0.3, [0.55, 0.25, 0.2], [0.4, 0.15, 0.12]);
+
+rect(-0.32, -0.55, -0.16, -0.25, [0.45, 0.25, 0.1], [0.3, 0.15, 0.05]);
+disc(-0.2, -0.4, 0.015, [1, 0.9, 0.3], [0.8, 0.6, 0.1]);
+
+rect(-0.5, -0.3, -0.38, -0.15, [0.6, 0.85, 1.0], [0.4, 0.7, 0.95], 3);
+rect(-0.1, -0.3, 0.05, -0.15, [0.6, 0.85, 1.0], [0.4, 0.7, 0.95], 3);
+
+disc(-0.2, 0.08, 0.06, [0.6, 0.85, 1.0], [0.4, 0.7, 0.95], 3, 10);
+
+rect(0.58, -0.6, 0.66, -0.25, [0.5, 0.3, 0.15], [0.35, 0.2, 0.1]);
+tri([0.35, -0.25], [0.89, -0.25], [0.62, 0.05], [0.1, 0.5, 0.2], [0.1, 0.5, 0.2], [0.3, 0.8, 0.3]);
+tri([0.4, -0.08], [0.84, -0.08], [0.62, 0.2], [0.1, 0.55, 0.2], [0.1, 0.55, 0.2], [0.35, 0.85, 0.35]);
+tri([0.46, 0.1], [0.78, 0.1], [0.62, 0.35], [0.15, 0.6, 0.25], [0.15, 0.6, 0.25], [0.4, 0.9, 0.4]);
+
+for (let i = 0; i < 4; i++) {
+  const x = -0.95 + i * 0.12;
+  tri([x, -0.6], [x + 0.05, -0.6], [x + 0.025, -0.45], [0.9, 0.9, 0.85], [0.9, 0.9, 0.85], [1, 1, 0.95]);
+  rect(x, -0.82, x + 0.05, -0.6, [0.9, 0.9, 0.85], [0.7, 0.7, 0.65]);
+}
+rect(-0.95, -0.72, -0.53, -0.68, [0.95, 0.95, 0.9], [0.75, 0.75, 0.7]);
+
+const fl = [[-0.7, -0.9, [1, 0.3, 0.4]], [-0.3, -0.85, [1, 0.8, 0.2]], [0.3, -0.9, [0.8, 0.4, 1]]];
+fl.forEach(([x, y, c]) => {
+  rect(x - 0.005, y - 0.08, x + 0.005, y, [0.2, 0.6, 0.2], [0.1, 0.4, 0.1]);
+  disc(x, y + 0.02, 0.03, [1, 1, 0.5], c, 0, 6);
+});
+
+function cloud(cx, cy, s) {
+  const w = [1, 1, 1], g = [0.85, 0.9, 0.95];
+  disc(cx, cy, 0.07 * s, w, g, 1, 10);
+  disc(cx + 0.09 * s, cy + 0.03 * s, 0.09 * s, w, g, 1, 10);
+  disc(cx + 0.19 * s, cy, 0.07 * s, w, g, 1, 10);
+}
+cloud(-0.7, 0.7, 1.0);
+cloud(-0.1, 0.55, 0.8);
+cloud(0.2, 0.85, 0.7);
+
+const N = data.length / 6;
+document.title = `2D Triangle Mesh Scene (${N} vertices)`;
+console.log('Total vertices:', N);
+
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
+const F = Float32Array.BYTES_PER_ELEMENT, stride = 6 * F;
+const loc = n => gl.getAttribLocation(prog, n);
+gl.enableVertexAttribArray(loc('a_pos'));   gl.vertexAttribPointer(loc('a_pos'), 2, gl.FLOAT, false, stride, 0);
+gl.enableVertexAttribArray(loc('a_color')); gl.vertexAttribPointer(loc('a_color'), 3, gl.FLOAT, false, stride, 2 * F);
+gl.enableVertexAttribArray(loc('a_tag'));   gl.vertexAttribPointer(loc('a_tag'), 1, gl.FLOAT, false, stride, 5 * F);
+
+const uNight = gl.getUniformLocation(prog, 'u_night');
+const uWind  = gl.getUniformLocation(prog, 'u_wind');
+const uSunY  = gl.getUniformLocation(prog, 'u_sunY');
+
+let night = 0, wind = 0, sunY = 0;
+window.addEventListener('keydown', e => {
+  switch (e.key) {
+    case 'n': case 'N': night = 1 - night; break;
+    case 'ArrowRight': wind += 0.04; break;
+    case 'ArrowLeft':  wind -= 0.04; break;
+    case 'ArrowUp':    sunY = Math.min(sunY + 0.04, 0.3); break;
+    case 'ArrowDown':  sunY = Math.max(sunY - 0.04, -0.7); break;
+    case 'r': case 'R': night = 0; wind = 0; sunY = 0; break;
+    default: return;
+  }
+  e.preventDefault();
+  render();
+});
+
+function render() {
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.clearColor(0, 0, 0, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.uniform1f(uNight, night);
+  gl.uniform1f(uWind, wind);
+  gl.uniform1f(uSunY, sunY);
+  gl.drawArrays(gl.TRIANGLES, 0, N);
+}
+render();
+</script>
+</body>
+</html>
